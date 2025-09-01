@@ -1,0 +1,23 @@
+PurchaseOrderReceiptImport is a BusinessClass
+	prefix is cfg
+
+	Persistent Fields
+		Company						is Numeric 4
+		PurchaseOrderReceiptImport	is Numeric 11
+		RunGroup					is Alpha size 4
+		PurchaseOrder				is Numeric 11
+		BillOfLading				is Alpha size 15
+		ReceiptComments				is Alpha size 100
+
+	Sets
+		ByCompanyAndImport
+			Sort Order
+				Company
+				PurchaseOrderReceiptImport
+
+	Actions
+		Create is a Create Action
+
+		Update is an Update Action
+
+		Delete is a Delete Action

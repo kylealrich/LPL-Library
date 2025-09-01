@@ -1,0 +1,254 @@
+// EXACT PURCHASEORDER RELATION SYNTAXES FROM PAYABLESINVOICE.BUSCLASS
+// Extracted from PayablesInvoice Relations section
+
+Relations
+
+	MatchPurchaseOrderInvoicesRel
+		classic name is MAPOINV
+		one-to-many relation to MatchPurchaseOrderInvoice
+		Field Mapping uses Set2
+			related.Company			= Company
+			related.Vendor			= Vendor
+			related.PayablesInvoice	= PayablesInvoice
+
+	MatchPurchaseOrderInvoicesPurgeRel
+		classic name is MAPOINV
+		one-to-many relation to MatchPurchaseOrderInvoice
+		Field Mapping uses Set2
+			related.Company			= Company
+			related.Vendor			= Vendor
+			related.PayablesInvoice	= PayablesInvoice
+		Instance Selection
+			include deleted records
+
+	MatchPurchaseOrderInvoiceHistoryRel
+		one-to-many relation to MatchPurchaseOrderInvoiceHistory
+		Field Mapping uses Set2
+			related.Company			= Company
+			related.Vendor			= Vendor
+			related.PayablesInvoice	= PayablesInvoice
+
+	LocalMatchPurchaseOrderInvoicesRel
+		one-to-many relation to MatchPurchaseOrderInvoice
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= LocalPurchaseOrder
+		Instance Selection
+			where (related.MatchStatus > 2
+			or    (related.MatchStatus = 2
+			and    related.HasAdjustCostToInvoiceMessage)
+			or     related.MatchProcessType.Service))
+
+	VendorPurchaseOrdersRel
+		classic name is PURCHORDER
+		one-to-many relation to PurchaseOrder
+		Field Mapping uses Set11
+			related.Company		= Company
+			related.Vendor		= Vendor
+
+	LocalPurchaseOrderRel
+		one-to-many relation to PurchaseOrder
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= LocalPurchaseOrder
+
+	PurchaseOrderLineSourceRel
+		one-to-many relation to PurchaseOrderLineSource
+		Field Mapping uses Set1
+			related.Company			= Company
+			related.PurchaseOrder	= LocalPurchaseOrder
+			related.PurchaseOrderLine = LocalLineNbr
+
+	PurchaseOrderLineRel
+		one-to-one relation to PurchaseOrderLine
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= LocalPurchaseOrder
+			related.PurchaseOrderLine = LocalLineNbr
+
+	PurchaseOrderLineInvoiceDetailRel
+		one-to-many relation to PayablesInvoiceDetail
+		Field Mapping uses ByCompanyVendorPayablesInvoice
+			related.Company			= Company
+			related.Vendor			= Vendor
+			related.PayablesInvoice	= PayablesInvoice
+			related.PurchaseOrder	= LocalPurchaseOrder
+			related.PurchaseOrderLine = LocalLineNbr
+
+	PurchaseOrderLineAddOnChargeRel
+		one-to-many relation to PurchaseOrderAndLineAddOnCharge
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+		Instance Selection
+			where (related.LineAddOnCharge
+			and   (!related.HeaderSpreadAddOnCharge
+			or     MatchProcessType.AOCOnly))
+
+	PurchaseOrderLinesToMatchRel
+		one-to-many relation to PurchaseOrderLine
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+		Instance Selection
+			where (related.AllowMatchCreateDetail)
+
+	SCPurchaseOrderLineRel
+		one-to-many relation to PurchaseOrderLine
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+
+	PurchaseOrderAddOnChargeRel
+		one-to-many relation to PurchaseOrderAndLineAddOnCharge
+		Field Mapping uses symbolic key
+			related.Company			= Company
+		Instance Selection
+			where  (related.LinkedToContextInvoice
+			and     related.PurchaseOrderLine not entered)
+
+	PurchaseOrderAddOnChargesForVendorRel
+		one-to-many relation to PurchaseOrderAndLineAddOnCharge
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+		Instance Selection
+			where  (related.Vendor = Vendor)
+
+	PurchaseOrderSpreadAddOnChargeRel
+		one-to-many relation to PurchaseOrderSpreadAddOnCharge
+		Field Mapping uses ByVendor
+			related.Company			= Company
+			related.Vendor			= Vendor
+
+	PurchaseOrderReceiptsRel
+		one-to-many relation to PurchaseOrderReceipt
+		Field Mapping uses Set3
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+		Instance Selection
+			where (related.PurchaseFromLocation = FirstPurchaseOrder.PurchaseFromLocation)
+
+	PurchaseOrderReceiptsSupplierRel
+		one-to-many relation to PurchaseOrderReceipt
+		Field Mapping uses Set3
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+		Instance Selection
+			where (related.PurchaseFromLocation = FirstPurchaseOrder.PurchaseFromLocation)
+
+	PurchaseOrderReceiptSet3Rel
+		classic name is PORSET3
+		one-to-many relation to PurchaseOrderReceipt
+		Field Mapping uses Set3
+			related.Company			= Company
+			related.PurchaseOrder	= FirstPurchaseOrder
+
+	PurchaseOrderReceiptVendorSet9Rel
+		classic name is PORSET9-VEN
+		one-to-many relation to PurchaseOrderReceipt
+		Field Mapping uses Set9
+			related.Company = Company
+			related.Vendor  = Vendor
+
+	PurchaseOrderReceiptsForInvoiceRel
+		one-to-many relation to PurchaseOrderReceipt
+		Field Mapping uses Set9
+			related.Company		= Company
+			related.Vendor		= Vendor
+
+	PurchaseOrderReceiptLineRel
+		classic name is PORECLINE
+		one-to-many relation to PurchaseOrderReceiptLine
+		Field Mapping uses Set11
+			related.Company       = Company
+			related.MatchObjectID = MatchObjectID
+
+	PurchaseOrderReceiptLinesForInvoiceRel
+		classic name is PORECLINE
+		one-to-many relation to PurchaseOrderReceiptLine
+		Field Mapping uses ByCompanyVendor
+			related.Company		= Company
+			related.Vendor		= Vendor
+		Instance Selection
+			where (related.LinkedToContextInvoice)
+
+	LocalPurchaseOrderReceiptLineRel
+		one-to-one relation to PurchaseOrderReceiptLine
+		Field Mapping uses symbolic key
+			related.Company					= Company
+			related.PurchaseOrderReceipt	= LocalReceipt
+			related.PurchaseOrderReceiptLine = LocalReceiptLine
+
+	PrepaidPurchaseOrderReceiptLineRel
+		one-to-many relation to PurchaseOrderReceiptLine
+		Field Mapping uses Set12
+			related.Company					= Company
+			related.PurchaseOrderReceipt	= LocalReceipt
+			related.MatchDetailKey			= LocalMatchDetailKey
+
+	PurchaseOrderReceiptAddOnChargesForInvoiceRel
+		one-to-many relation to PurchaseOrderReceiptLineAOC
+		Field Mapping uses symbolic key
+			related.Company = Company
+		Instance Selection
+			where (related.Vendor = Vendor
+			and    related.LinkedToContextInvoice)
+
+	PurchaseOrderReceiptAddOnChargesByMatchIDRel
+		one-to-many relation to PurchaseOrderReceiptLineAOC
+		Field Mapping uses symbolic key
+			related.Company = Company
+		Instance Selection
+			where (related.Vendor = Vendor
+			and    related.MatchObjectID = MatchObjectID)
+
+	PurchaseOrderReceiptInvoiceLinkSymbKeyRel
+		one-to-many relation to PurchaseOrderReceiptInvoiceLink
+		Field Mapping uses symbolic key
+		Instance Selection
+			where  (related.Company				= Company
+			and 	related.Vendor				= Vendor
+			and		related.PayablesInvoice.Invoice = Invoice)
+
+	PurchaseOrderReceiptInvoiceLinkPurgeSymbKeyRel
+		one-to-many relation to PurchaseOrderReceiptInvoiceLink
+		Field Mapping uses symbolic key
+		Instance Selection
+			include deleted records
+			where  (related.Company			= Company
+			and 	related.Vendor			= Vendor
+			and		related.PayablesInvoice	= PayablesInvoice)
+
+	PurchaseOrderReceiptInvoiceLinkSet3Rel
+		one-to-many relation to PurchaseOrderReceiptInvoiceLink
+		Field Mapping uses Set3
+		Instance Selection
+			where  (related.Company	= Company
+			and 	related.Vendor	= Vendor
+			and		related.PayablesInvoice = PayablesInvoice)
+
+	PurchaseOrderReceiptInvoiceLinkRel
+		classic name is POMATCHOBJ
+		one-to-many relation to PurchaseOrderReceiptInvoiceLink
+		Field Mapping uses Set2
+			related.Company                                       = Company
+			related.PurchaseOrderReceiptInvoiceLink.MatchObjectID = MatchObjectID
+		Instance Selection
+			where (related.PurchaseOrderReceiptInvoiceLink.AddOnCharge not entered)
+
+	PurchaseOrderReceiptInvoiceLinkAOCRel
+		classic name is POMATCHOBJ
+		one-to-many relation to PurchaseOrderReceiptInvoiceLink
+		Field Mapping uses Set2
+			related.Company                                       = Company
+			related.PurchaseOrderReceiptInvoiceLink.MatchObjectID = MatchObjectID
+		Instance Selection
+			where (related.PurchaseOrderReceiptInvoiceLink.AddOnCharge entered)
+
+	PurchaseOrderLinesRel
+		one-to-one relation to PurchaseOrderLine
+		Field Mapping uses symbolic key
+			related.Company			= Company
+			related.PurchaseOrder	= LocalPurchaseOrder
+			related.PurchaseOrderLine = LocalLineNbr

@@ -1,0 +1,64 @@
+PAYABLESINVOICE PURCHASEORDER RELATIONS ANALYSIS
+=================================================
+Date: Generated Analysis
+Source: PayablesInvoice.busclass
+
+SUMMARY
+-------
+The PayablesInvoice business class contains extensive existing relations to PurchaseOrder entities, supporting complex invoice-to-purchase-order matching scenarios.
+
+PRIMARY PURCHASEORDER RELATIONS
+-------------------------------
+1. MatchPurchaseOrderInvoicesRel
+   - Type: one-to-many relation to MatchPurchaseOrderInvoice
+   - Purpose: Primary relation for linking invoices to purchase orders
+   - Field Mapping: Custom mapping with PurchaseOrder field
+
+2. VendorPurchaseOrdersRel  
+   - Type: one-to-many relation to PurchaseOrder
+   - Purpose: Direct vendor purchase order access
+
+3. LocalPurchaseOrderRel
+   - Type: one-to-many relation to PurchaseOrder
+   - Field Mapping: related.PurchaseOrder = LocalPurchaseOrder
+
+4. PurchaseOrderLineRel
+   - Type: one-to-one relation to PurchaseOrderLine
+   - Field Mapping: related.PurchaseOrder = LocalPurchaseOrder
+                   related.PurchaseOrderLine = LocalLineNbr
+
+PURCHASE ORDER LINE RELATIONS
+-----------------------------
+- PurchaseOrderLineSourceRel (one-to-many to PurchaseOrderLineSource)
+- PurchaseOrderLineInvoiceDetailRel (relation to PurchaseOrderLine)
+- PurchaseOrderLineAddOnChargeRel (one-to-many to PurchaseOrderAndLineAddOnCharge)
+- PurchaseOrderLinesToMatchRel (one-to-many to PurchaseOrderLine)
+- SCPurchaseOrderLineRel (one-to-many to PurchaseOrderLine)
+
+PURCHASE ORDER RECEIPT RELATIONS
+--------------------------------
+- PurchaseOrderReceiptsRel (one-to-many to PurchaseOrderReceipt)
+- PurchaseOrderReceiptLineRel (one-to-many to PurchaseOrderReceiptLine)
+- PurchaseOrderReceiptInvoiceLinkRel (one-to-many to PurchaseOrderReceiptInvoiceLink)
+
+KEY TRANSIENT FIELDS
+--------------------
+- FirstPurchaseOrder: derives from first MatchPurchaseOrderInvoicesRel.PurchaseOrder
+- FirstPurchaseOrderFromDetail: derives from first PayablesInvoiceDetailRel.PurchaseOrder
+
+FIELD MAPPING PATTERNS
+----------------------
+- Symbolic Key: Uses default key fields of target business class
+- Custom Mapping: Uses specific sort sets with explicit field connections
+- Example: related.PurchaseOrder = LocalPurchaseOrder
+
+CONCLUSION
+----------
+PayablesInvoice already has comprehensive PurchaseOrder integration through multiple relation types supporting:
+- Invoice-to-PO matching
+- Multiple POs per invoice
+- Receipt processing
+- Add-on charge handling
+- Line-level relationships
+
+No additional basic PurchaseOrder relations are needed - the existing architecture provides full integration capabilities.

@@ -1,0 +1,277 @@
+cfgPurchaseOrderHeader is a BusinessClass
+	owned by GeneralLedger
+	prefix is cfg
+
+Persistent Fields
+	Company					is Numeric 4
+	PurchaseOrder			is Numeric 11
+	Vendor					is a Vendor
+	PurchaseOrderDate		is Date
+	RequestedDeliveryDate	is Date
+	Status					is Numeric 1
+		States
+			Draft			value is 0
+			Approved		value is 1
+			Issued			value is 2
+			Received		value is 3
+			Closed			value is 4
+			Cancelled		value is 9
+	TotalAmount				is Numeric size 15 precision 2
+	Currency				is a Currency
+	BuyerEmployee			is an Employee
+	VendorContact			is Alpha size 60
+	ShipToLocation			is a Location
+	PaymentTerms			is a PaymentTerms
+	ApprovalRequired		is Boolean
+	ApprovedBy				is an Employee
+	ApprovedDate			is Date
+	CancelReason			is Alpha size 100
+	CreatedBy				is an Employee
+	CreatedDate				is Date
+		default label is "Created Date"
+
+Transient Fields
+	LineCount				is Numeric 3
+	PendingApproval			is Boolean
+	OverBudget				is Boolean
+	VendorOnHold			is Boolean
+
+Local Fields
+	LocalApprover			is like Employee
+	LocalErrorMessage		is a MessageField
+		"Validation Error"
+	LocalTotalCalculated	is Numeric size 15 precision 2
+	LocalLineCounter		is Numeric 3
+
+Derived Fields
+	StatusDescription		is a DerivedField
+		type is Alpha size 20
+		restricted
+			if (Status = 0)
+				return "Draft"
+			if (Status = 1)
+				return "Approved"
+			if (Status = 2)
+				return "Issued"
+			if (Status = 3)
+				return "Received"
+			if (Status = 4)
+				return "Closed"
+			if (Status = 9)
+				return "Cancelled"
+			else
+				return "Unknown"
+
+	DaysToDelivery			is a DerivedField
+		type is Numeric 3
+		restricted
+			return RequestedDeliveryDate - PurchaseOrderDate
+
+	RequiresApproval		is a DerivedField
+		type is Boolean
+		restricted
+			return TotalAmount > 5000 or ApprovalRequired
+
+Conditions
+	CanApprove				when (Status = 0 and TotalAmount > 0)
+	CanIssue				when (Status = 1 and !VendorOnHold)
+	CanCancel				when (Status <= 2)
+	IsEditable				when (Status <= 1)
+
+Relations
+	PurchaseOrderLineRel
+		one-to-many relation to PurchaseOrderLine
+		Field Mapping uses symbolic key
+			related.Company = Company
+			related.PurchaseOrder = PurchaseOrder
+
+	VendorRel
+		one-to-one relation to Vendor
+		Field Mapping uses symbolic key
+			related.Vendor = Vendor
+
+	ApproverRel
+		one-to-one relation to Employee
+		Field Mapping uses symbolic key
+			related.Employee = ApprovedBy
+
+Sets
+	ByStatus
+		Sort Order
+			Status
+			PurchaseOrderDate
+	ByVendor
+		Sort Order
+			Vendor
+			PurchaseOrderDate
+	ByDate
+		Sort Order
+			PurchaseOrderDate
+			PurchaseOrder
+
+Field Rules
+	Company
+		required
+		initial value is system company
+	PurchaseOrder
+		required
+	Vendor
+		required
+		constraint (VendorRel.Status = "Active")
+			"Vendor must be active"
+	PurchaseOrderDate
+		required
+		initial value is system current date
+		constraint (PurchaseOrderDate >= system current date - 30)
+			"Purchase order date cannot be more than 30 days in the past"
+	RequestedDeliveryDate
+		required
+		constraint (RequestedDeliveryDate >= PurchaseOrderDate)
+			"Delivery date cannot be before purchase order date"
+	Status
+		initial value is 0
+	TotalAmount
+		constraint (TotalAmount >= 0)
+			"Total amount cannot be negative"
+	BuyerEmployee
+		required
+	ApprovedBy
+		constraint (Status = 1 and ApprovedBy entered)
+			"Approved by is required when status is approved"
+	ApprovedDate
+		constraint (Status = 1 and ApprovedDate entered)
+			"Approved date is required when status is approved"
+	CreatedBy
+		required
+		initial value is system user
+		cannot be changed
+	CreatedDate
+		required
+		initial value is system current date
+		cannot be changed
+
+Actions
+	Create is a Create Action
+		Entrance Rules
+			constraint (Vendor entered)
+				"Vendor is required"
+			if (TotalAmount > 5000)
+				ApprovalRequired = true
+		Action Rules
+			Status = 0
+			CreatedBy = system user
+			CreatedDate = system current date
+			LineCount = 0
+		Exit Rules
+			invoke CalculateTotal
+
+	Update is an Update Action
+		valid when (IsEditable)
+		Entrance Rules
+			constraint (Status <= 1)
+				"Cannot modify purchase order after it has been issued"
+		Action Rules
+			if (TotalAmount > 5000 and !ApprovalRequired)
+				ApprovalRequired = true
+				Status = 0
+		Exit Rules
+			invoke CalculateTotal
+
+	Delete is a Delete Action
+		valid when (Status = 0)
+		confirmation required
+			"Are you sure you want to delete this purchase order?"
+		Entrance Rules
+			constraint (Status = 0)
+				"Can only delete draft purchase orders"
+			constraint (!PurchaseOrderLineRel exists)
+				"Cannot delete purchase order with existing lines"
+
+	Approve is an Instance Action
+		valid when (CanApprove)
+		confirmation required
+			"Approve this purchase order?"
+		Parameters
+			PrmApprover		is an Employee
+		Parameter Rules
+			PrmApprover
+				required
+		Entrance Rules
+			constraint (TotalAmount > 0)
+				"Cannot approve purchase order with zero amount"
+			constraint (PurchaseOrderLineRel exists)
+				"Cannot approve purchase order without lines"
+		Action Rules
+			Status = 1
+			ApprovedBy = PrmApprover
+			ApprovedDate = system current date
+		Exit Rules
+			if (Company.BODTrigger)
+				trigger "PurchaseOrderService" PA service
+					title is "PO Approved: <PurchaseOrder>"
+
+	Issue is an Instance Action
+		valid when (CanIssue)
+		confirmation required
+			"Issue this purchase order to vendor?"
+		Entrance Rules
+			constraint (Status = 1)
+				"Purchase order must be approved before issuing"
+			constraint (!VendorRel.OnHold)
+				"Cannot issue to vendor on hold"
+		Action Rules
+			Status = 2
+		Exit Rules
+			invoke SendToVendor
+
+	Cancel is an Instance Action
+		valid when (CanCancel)
+		confirmation required
+			"Cancel this purchase order?"
+		Parameters
+			PrmCancelReason		is Alpha size 100
+		Parameter Rules
+			PrmCancelReason
+				required
+		Action Rules
+			Status = 9
+			CancelReason = PrmCancelReason
+		Exit Rules
+			for each PurchaseOrderLineRel
+				invoke Cancel each
+
+	CalculateTotal is an Instance Action
+		restricted
+		Local Fields
+			LocalTotal		is Numeric size 15 precision 2
+		Action Rules
+			LocalTotal = 0
+			LocalLineCounter = 0
+			for each PurchaseOrderLineRel
+				LocalTotal = LocalTotal + each.ExtendedAmount
+				LocalLineCounter = LocalLineCounter + 1
+			TotalAmount = LocalTotal
+			LineCount = LocalLineCounter
+
+	SendToVendor is an Instance Action
+		restricted
+		Action Rules
+			if (VendorRel.EmailAddress entered)
+				invoke SendEmail
+					invoked.ToAddress = VendorRel.EmailAddress
+					invoked.Subject = "Purchase Order " + PurchaseOrder
+					invoked.Body = "Please see attached purchase order"
+
+	BulkApprove is a Set Action
+		restricted
+		Parameters
+			PrmApprover		is an Employee
+			PrmMaxAmount	is Numeric size 15 precision 2
+		Instance Selection
+			where (Status = 0
+			and   TotalAmount <= PrmMaxAmount
+			and   TotalAmount > 0)
+		Action Rules
+			Instance Rules
+				invoke Approve
+					invoked.PrmApprover = PrmApprover

@@ -1,0 +1,6 @@
+Relations
+	PurchaseOrderRel
+		one-to-one relation to PurchaseOrder
+		Field Mapping uses symbolic key
+			related.Company = Company
+			related.PurchaseOrder = PurchaseOrder

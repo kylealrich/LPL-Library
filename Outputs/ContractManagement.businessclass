@@ -1,0 +1,373 @@
+ContractManagement is a BusinessClass
+	owned by FinanceEnterpriseGroup
+	prefix is CTMG
+	implements StaticJava
+	implements BODId
+	disable AuditIndex
+
+	Persistent Fields
+		Company					is a Company
+		ContractNumber			is Alpha size 20
+		ContractType			is Alpha size 10
+			States
+				Service			value is 1
+				Purchase		value is 2
+				Lease			value is 3
+				Maintenance		value is 4
+		Vendor					is a Vendor
+		ContractDescription		is Description
+		StartDate				is Date
+		EndDate					is Date
+		ContractValue			is InternationalAmount
+		Currency				is a Currency
+		Status					is Numeric size 1
+			States
+				Draft			value is 0
+				Active			value is 1
+				Expired			value is 2
+				Terminated		value is 3
+		AutoRenewal				is Boolean
+		RenewalPeriod			is Numeric size 3
+		NotificationDays		is Numeric size 3
+		ResponsibleEmployee		is an Employee
+		ApprovalLevel			is Numeric size 1
+			States
+				None			value is 0
+				Manager			value is 1
+				Director		value is 2
+				Executive		value is 3
+		ApprovedBy				is an Employee
+		ApprovedDate			is Date
+		CreatedBy				is an Employee
+		CreatedDate				is TimeStamp
+		LastModifiedBy			is an Employee
+		LastModifiedDate		is TimeStamp
+		TerminationReason		is Alpha size 100
+		RenewalCount			is Numeric size 2
+		NextReviewDate			is Date
+		ContractDocument		is XMLDocument
+		holds pii
+
+	Transient Fields
+		DaysUntilExpiration		is Numeric size 5
+			derive value from DerivedDaysUntilExpiration
+		TotalAmendmentValue		is InternationalAmount
+			derive value from DerivedTotalAmendmentValue
+		IsExpiringSoon			is Boolean
+			derive value from DerivedIsExpiringSoon
+
+	Local Fields
+		LocalNotificationSent	is Boolean
+		LocalRenewalRequired	is Boolean
+		LocalApprovalNeeded		is Boolean
+		LocalErrorMessage		is a MessageField
+			"Contract validation error occurred"
+		LocalAmendmentSet		is a ContractAmendment set
+		LocalPaymentSet			is a ContractPayment set
+
+	Derived Fields
+		DerivedDaysUntilExpiration	is a DerivedField
+			type is Numeric size 5
+			restricted
+			if (Status.Active and EndDate entered)
+				return EndDate - today
+			else
+				return 0
+
+		DerivedTotalAmendmentValue	is a DerivedField
+			type is InternationalAmount
+			restricted
+			return sum of ContractAmendmentRel.AmendmentValue
+
+		DerivedIsExpiringSoon		is a DerivedField
+			type is Boolean
+			restricted
+			if (Status.Active and DaysUntilExpiration <= NotificationDays)
+				return true
+			else
+				return false
+
+		DerivedContractSummary		is a DerivedField
+			type is Alpha size 200
+			restricted
+			return ContractNumber + " - " + ContractDescription + " (" + Vendor.VendorName + ")"
+
+	Conditions
+		RequiresApproval
+			restricted
+			when (ContractValue > 50000
+			and  ApprovalLevel.None)
+
+		IsRenewable
+			when (AutoRenewal
+			and  Status.Active
+			and  DaysUntilExpiration <= 30)
+
+		CanTerminate
+			restricted
+			when (Status.Active
+			or   Status.Draft)
+
+		HasAmendments
+			when (ContractAmendmentRel exists)
+
+		IsHighValue
+			restricted
+			when (ContractValue > 100000)
+
+	Relations
+		ContractAmendmentRel
+			one-to-many relation to ContractAmendment
+			Field Mapping uses symbolic key
+				related.Company = Company
+				related.ContractNumber = ContractNumber
+			Instance Selection
+				where (related.Status.Active)
+
+		ContractPaymentRel
+			one-to-many relation to ContractPayment
+			Field Mapping uses ByContract
+				related.Company = Company
+				related.ContractNumber = ContractNumber
+
+		ContractDocumentRel		is a ContractDocument set
+			Instance Selection
+				where (related.DocumentType = "Contract")
+
+		VendorContactRel
+			one-to-many relation to VendorContact
+			Field Mapping uses symbolic key
+				related.Company = Company
+				related.Vendor = Vendor
+
+		ApprovalHistoryRel		is a ContractApprovalHistory set
+
+	Sets
+		ByVendor
+			duplicates
+			Sort Order
+				Company
+				Vendor
+				ContractNumber
+
+		ByExpirationDate
+			indexed
+			Sort Order
+				EndDate
+				ContractNumber
+
+		ActiveContracts
+			restricted
+			Sort Order
+				Company
+				ContractNumber
+			Instance Selection
+				where (Status.Active)
+
+		ExpiringSoon
+			Sort Order
+				EndDate
+				ContractValue
+			Instance Selection
+				where (DerivedIsExpiringSoon)
+
+	Field Rules
+		Company
+			required
+
+		ContractNumber
+			required
+			constraint (ContractNumber matches "^[A-Z]{2}[0-9]{6}$")
+				"ContractNumberMustFollowFormat_XX999999"
+
+		ContractType
+			required
+
+		Vendor
+			required
+			constraint (VendorRel.VendorStatus.Active)
+				"VendorMustBeActive"
+
+		ContractDescription
+			required
+
+		StartDate
+			required
+			constraint (StartDate <= EndDate)
+				"StartDateCannotBeAfterEndDate"
+
+		EndDate
+			required
+			constraint (EndDate > StartDate)
+				"EndDateMustBeAfterStartDate"
+
+		ContractValue
+			required
+			constraint (ContractValue > 0)
+				"ContractValueMustBeGreaterThanZero"
+
+		Currency
+			required
+
+		Status
+			default to Status.Draft
+
+		NotificationDays
+			default to 30
+			constraint (NotificationDays >= 1 and NotificationDays <= 365)
+				"NotificationDaysMustBeBetween1And365"
+
+		ResponsibleEmployee
+			required
+			constraint (ResponsibleEmployeeRel.EmployeeStatus.Active)
+				"ResponsibleEmployeeMustBeActive"
+
+		if (ContractValue > 50000)
+			ApprovalLevel
+				required
+				constraint (ApprovalLevel != ApprovalLevel.None)
+					"HighValueContractsRequireApproval"
+
+		if (Status.Active)
+			ApprovedBy
+				required
+			ApprovedDate
+				required
+
+		CreatedBy
+			restricted
+			default to actor.agent(Employee).Employee
+
+		CreatedDate
+			restricted
+			default to today
+
+	Actions
+		Create is a Create Action
+			Entrance Rules
+				if (ContractValue > 50000)
+					ApprovalLevel = ApprovalLevel.Manager
+				CreatedBy = actor.agent(Employee).Employee
+				CreatedDate = today
+				Status = Status.Draft
+			Action Rules
+				if (AutoRenewal and RenewalPeriod not entered)
+					RenewalPeriod = 12
+				NextReviewDate = EndDate - NotificationDays
+			Exit Rules
+				if (RequiresApproval)
+					invoke Create ContractApprovalHistory
+						invoked.ContractNumber = ContractNumber
+						invoked.ApprovalStatus = "Pending"
+						invoked.RequestedBy = CreatedBy
+
+		Update is an Update Action
+			Entrance Rules
+				constraint (Status != Status.Terminated)
+					"CannotModifyTerminatedContract"
+			Action Rules
+				LastModifiedBy = actor.agent(Employee).Employee
+				LastModifiedDate = today
+				if (EndDateChanged and AutoRenewal)
+					NextReviewDate = EndDate - NotificationDays
+
+		Delete is a Delete Action
+			confirmation required
+				"DeletingContractWillRemoveAllRelatedData"
+			Entrance Rules
+				constraint (Status.Draft)
+					"CanOnlyDeleteDraftContracts"
+			Action Rules
+				for each ContractAmendmentRel
+					invoke Delete each
+				for each ContractPaymentRel
+					invoke Delete each
+
+		Approve is an Instance Action
+			restricted
+			Parameters
+				PrmApprovalComments		is Text
+			Parameter Rules
+				PrmApprovalComments
+					required
+			Entrance Rules
+				constraint (Status.Draft)
+					"CanOnlyApproveContractsInDraftStatus"
+				constraint (RequiresApproval)
+					"ContractDoesNotRequireApproval"
+			Action Rules
+				Status = Status.Active
+				ApprovedBy = actor.agent(Employee).Employee
+				ApprovedDate = today
+				invoke Create ContractApprovalHistory
+					invoked.ContractNumber = ContractNumber
+					invoked.ApprovalStatus = "Approved"
+					invoked.ApprovedBy = ApprovedBy
+					invoked.Comments = PrmApprovalComments
+
+		Terminate is an Instance Action
+			Parameters
+				PrmTerminationReason	is Alpha size 100
+				PrmTerminationDate		is Date
+			Parameter Rules
+				PrmTerminationReason
+					required
+				PrmTerminationDate
+					required
+					constraint (PrmTerminationDate >= today)
+						"TerminationDateCannotBeInPast"
+			Entrance Rules
+				constraint (CanTerminate)
+					"ContractCannotBeTerminated"
+			Action Rules
+				Status = Status.Terminated
+				TerminationReason = PrmTerminationReason
+				EndDate = PrmTerminationDate
+				LastModifiedBy = actor.agent(Employee).Employee
+				LastModifiedDate = today
+
+		ProcessRenewals is a Set Action
+			restricted
+			run in background
+			Instance Selection
+				where (IsRenewable
+				and   DaysUntilExpiration <= 30)
+			Action Rules
+				Instance Rules
+					if (AutoRenewal)
+						EndDate = EndDate + (RenewalPeriod * 30)
+						RenewalCount = RenewalCount + 1
+						NextReviewDate = EndDate - NotificationDays
+						invoke Create ContractAmendment
+							invoked.ContractNumber = ContractNumber
+							invoked.AmendmentType = "Renewal"
+							invoked.AmendmentDate = today
+							invoked.Description = "Automatic renewal #" + RenewalCount
+
+		SendExpirationNotifications is a Set Action
+			restricted
+			run in background
+			Instance Selection
+				where (DerivedIsExpiringSoon
+				and   !LocalNotificationSent)
+			Action Rules
+				Instance Rules
+					invoke SendNotification ResponsibleEmployee
+						invoked.Subject = "Contract Expiring Soon: " + ContractNumber
+						invoked.Message = DerivedContractSummary + " expires on " + EndDate
+					LocalNotificationSent = true
+
+		GenerateContractReport is an Instance Action
+			Parameters
+				PrmReportType		is Alpha size 20
+				PrmIncludeAmendments	is Boolean
+			Parameter Rules
+				PrmReportType
+					required
+			Action Rules
+				if (PrmReportType = "Summary")
+					invoke GenerateSummaryReport
+				else
+				if (PrmReportType = "Detailed")
+					invoke GenerateDetailedReport
+						invoked.IncludeAmendments = PrmIncludeAmendments

@@ -1,0 +1,299 @@
+=== COMPLETE ACTION SYNTAX REFERENCE ===
+
+**ACTION DEFINITION:**
+```lpl
+ActionName is a/an ActionType
+ActionName is an Instance Action
+ActionName is a Create Action
+ActionName is an Update Action
+ActionName is a Delete Action
+ActionName is a Purge Action
+ActionName is a Set Action
+ActionName is an Import Action
+ActionName is an Action
+```
+
+**ACTION ATTRIBUTES:**
+```lpl
+restricted
+confirmation required
+    "ConfirmationMessage"
+valid when (Condition)
+default label is "ActionLabel"
+default label is untranslatable
+run in background
+run in foreground
+resume on error
+bypass field rules
+refresh and lock this instance
+disable multiple instance selection
+completion message is "CompletionMessage"
+action comment required
+no records message is "NoRecordsMessage"
+disable checkpoint
+```
+
+**PARAMETERS:**
+```lpl
+Parameters
+    ParameterName       is DataType
+        default label is "ParameterLabel"
+        States
+            StateName       value is Value
+            StateName2      value is Value2
+    ParameterName2      is Boolean
+    ParameterName3      is Alpha size 100
+    ParameterName4      is Numeric size 10
+    ParameterName5      is Date
+    ParameterName6      is like FieldName
+    ParameterName7      is a BusinessClassName
+    ParameterName8      is an BusinessClassName
+```
+
+**PARAMETER RULES:**
+```lpl
+Parameter Rules
+    ParameterName
+        required
+            "ErrorMessage"
+        initial value is DefaultValue
+        default to DefaultValue
+        constraint (ValidationCondition)
+            "ValidationErrorMessage"
+        cannot be entered
+            "CannotEnterMessage"
+        if (Condition)
+            required
+            cannot be entered
+```
+
+**LOCAL FIELDS:**
+```lpl
+Local Fields
+    LocalFieldName      is DataType
+    LocalVariable       is Boolean
+    LocalCounter        is Numeric size 9
+    LocalMessage        is Alpha size 200
+    LocalView           is a BusinessClassName view
+    LocalArray          is an ArrayType
+```
+
+**INSTANCE SELECTION (Set Actions):**
+```lpl
+Instance Selection
+    where (FilterCondition1
+    and   FilterCondition2
+    or    FilterCondition3)
+    include deleted records
+```
+
+**SORT ORDER (Set Actions):**
+```lpl
+Sort Order
+    FieldName1
+    FieldName2 descending
+    FieldName3
+```
+
+**ACCUMULATORS (Set Actions):**
+```lpl
+Accumulators
+    CounterName
+    TotalAmount
+    InstanceCount
+```
+
+**ACTION RULES:**
+```lpl
+Action Rules
+    // Field assignments
+    FieldName = Value
+    FieldName += IncrementValue
+    FieldName *= MultiplierValue
+    initialize FieldName
+    force default FieldName to Value
+    
+    // Conditional logic
+    if (Condition)
+        statements
+    else
+    if (Condition2)
+        statements
+    else
+        statements
+    
+    // Loops
+    for each RelationName
+        statements
+        commit transaction
+        if (ExitCondition)
+            end for each
+    
+    while (Condition)
+        statements
+        Counter += 1
+    
+    // Invoke operations
+    invoke ActionName TargetEntity
+        assign result to LocalVariable
+        fill in fields from SourceEntity
+            except invoked.ExcludedField
+        invoked.FieldName = Value
+        resume on error
+            ErrorHandling
+    
+    // Include rule blocks
+    include RuleBlockName
+        replace ParameterName with ActualValue
+    
+    // Constraints and validation
+    constraint (ValidationCondition)
+        "ErrorMessage"
+    
+    confirmation required
+        "ConfirmationMessage"
+    
+    // Display and logging
+    display "Message with <FieldName>"
+    log "LogMessage"
+    log untranslatable:"English message"
+    
+    // State transitions
+    make transition to StateName
+    
+    // Process flow initiation
+    initiate ProcessFlowName process
+        title is "Title with <FieldName>"
+        Variables
+            VariableName1 = Value1
+            VariableName2
+        URLs
+            "<linkback(webapp is AppName navigation is NavName text is \"LinkText\")>"
+        Criteria
+            CriteriaField1
+            CriteriaField2 = Value
+    
+    // Email integration
+    send email
+        to EmailAddress
+        from SenderAddress
+        subject "Subject with <FieldName>"
+        Contents
+            "Email body line 1"
+            "Email body line 2"
+    
+    // BOD integration
+    send ion bod
+        bod is BODXmlField
+        bod type is "Sync.EntityName"
+    
+    // Transaction control
+    commit transaction
+    end set action instance loop
+```
+
+**SET ACTION SPECIFIC RULES:**
+```lpl
+Action Rules
+    Set Rules
+        Entrance Rules
+            // Execute before processing instances
+        Exit Rules
+            // Execute after processing all instances
+    
+    Instance Rules
+        // Execute for each instance
+        increment CounterName
+        statements
+        commit transaction
+    
+    Empty Set Rules
+        // Execute when no instances found
+        statements
+```
+
+**ENTRANCE RULES:**
+```lpl
+Entrance Rules
+    // Validation before action execution
+    constraint (PreCondition)
+        "PreConditionError"
+    
+    if (SetupCondition)
+        SetupLogic
+```
+
+**EXIT RULES:**
+```lpl
+Exit Rules
+    // Post-processing after action completion
+    if (CleanupCondition)
+        CleanupLogic
+    
+    invoke PostProcessingAction
+```
+
+**BACKGROUND PROCESSING:**
+```lpl
+invoke ActionName in background
+invoke ActionName in background group (GroupName)
+    run after AsyncId
+    run after background group (PreviousGroupName)
+```
+
+**ERROR HANDLING:**
+```lpl
+resume on error
+    ErrorField = error message
+    ErrorFlag = true
+    ErrorCounter += 1
+```
+
+**FIELD OPERATIONS:**
+```lpl
+// Assignment patterns
+FieldName = Value
+FieldName = reference to this instance
+FieldName = reference to EntityName
+FieldName = current date
+FieldName = current timestamp
+FieldName = actor
+FieldName = system current timestamp
+
+// Initialization
+initialize FieldName
+force default FieldName to Value
+
+// Arithmetic
+FieldName += Value
+FieldName -= Value
+FieldName *= Value
+FieldName /= Value
+```
+
+**CONDITIONAL PATTERNS:**
+```lpl
+// Existence checks
+if (RelationName exists)
+if (RelationName not exists)
+if (FieldName entered)
+if (FieldName not entered)
+
+// Change detection
+if (FieldName changed)
+if (FieldName not changed)
+
+// Comparisons
+if (FieldName = Value)
+if (FieldName != Value)
+if (FieldName > Value)
+if (FieldName >= Value)
+if (FieldName < Value)
+if (FieldName <= Value)
+
+// Boolean logic
+if (Condition1 and Condition2)
+if (Condition1 or Condition2)
+if (not Condition)
+if (!BooleanField)
+```

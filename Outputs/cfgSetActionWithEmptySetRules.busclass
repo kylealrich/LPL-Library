@@ -1,0 +1,69 @@
+cfgProcessFlowInitiator is a BusinessClass
+	owned by ProcessManagement
+	prefix is cfg
+
+	Persistent Fields
+		ProcessGroup		is Numeric size 4
+		ProcessType			is Alpha size 10
+		ProcessStatus		is Numeric size 1
+			States
+				NotStarted		value is 0
+				InProgress		value is 1
+				Completed		value is 2
+		LastProcessDate		is Date
+		ProcessedBy			is an Operator
+
+	Sets
+		ByProcessGroup
+			Sort Order
+				ProcessGroup
+				ProcessType
+
+	Actions
+		InitiateProcessFlow is a Set Action
+			restricted
+			no records message is "No_Records_Found_Initiating_Process_Flow"
+			Parameters
+				PrmProcessGroup		is Numeric size 4
+				PrmProcessType		is Alpha size 10
+				PrmInitiatedBy		is an Operator
+			Parameter Rules
+				PrmProcessGroup
+					required
+				PrmProcessType
+					required
+				PrmInitiatedBy
+					initial value is actor
+					default to actor
+			Instance Selection
+				where (ProcessGroup = PrmProcessGroup
+				and   ProcessType = PrmProcessType
+				and   ProcessStatus = ProcessStatus.NotStarted)
+			Action Rules
+				Set Rules
+					Entrance Rules
+						display "Processing_Records_For_Group_<PrmProcessGroup>_Type_<PrmProcessType>"
+					Exit Rules
+						display "Completed_Processing_<InstanceCount>_Records"
+				Instance Rules
+					ProcessStatus = ProcessStatus.InProgress
+					ProcessedBy = PrmInitiatedBy
+					LastProcessDate = current date
+					invoke StartProcessWorkflow ProcessFlow
+						invoked.ProcessGroup = ProcessGroup
+						invoked.ProcessType = ProcessType
+						invoked.InitiatedBy = PrmInitiatedBy
+					commit transaction
+				Empty Set Rules
+					display "No_Records_Found_For_Group_<PrmProcessGroup>_Type_<PrmProcessType>"
+					invoke Create ProcessFlowInitiation
+						invoked.ProcessGroup = PrmProcessGroup
+						invoked.ProcessType = PrmProcessType
+						invoked.InitiationDate = current date
+						invoked.InitiatedBy = PrmInitiatedBy
+						invoked.Status = ProcessFlowInitiation.Status.AutoInitiated
+					invoke StartEmptyProcessWorkflow ProcessFlow
+						invoked.ProcessGroup = PrmProcessGroup
+						invoked.ProcessType = PrmProcessType
+						invoked.InitiatedBy = PrmInitiatedBy
+						invoked.Reason = "NoRecordsFound"

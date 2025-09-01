@@ -1,0 +1,512 @@
+cfgFinancialTransactionProcessor is a BusinessClass
+	owned by GeneralLedger
+	prefix is cfg
+
+Persistent Fields
+	Company					is Numeric 4
+	TransactionProcessor	is Numeric 11
+	ProcessorType			is AlphaUpper size 1
+		States
+			BatchProcessor		value is B
+			RealTimeProcessor	value is R
+			ScheduledProcessor	value is S
+	Status					is Numeric 1
+		States
+			Draft				value is 0
+			Active				value is 1
+			Processing			value is 2
+			Completed			value is 3
+			Failed				value is 4
+			Suspended			value is 5
+	ProcessingDate			is Date
+	BatchNumber				is Numeric 8
+	TotalTransactions		is Numeric 10
+	TotalAmount				is InternationalAmount
+	Currency				is a Currency
+	ProcessingRules			is Text
+	ErrorThreshold			is Numeric 3
+	RetryCount				is Numeric 2
+	LastProcessedTime		is TimeStamp
+	CreatedBy				is Alpha size 50
+	ApprovedBy				is Alpha size 50
+	ProcessingNotes			is Alpha size 500
+	Priority				is Numeric 1
+		States
+			Low					value is 1
+			Normal				value is 2
+			High				value is 3
+			Critical			value is 4
+	AutoRetry				is Boolean
+	NotificationEmail		is Alpha size 100
+		holds pii
+	FailureAction			is AlphaUpper size 1
+		States
+			Stop				value is S
+			Continue			value is C
+			Rollback			value is R
+
+Transient Fields
+	ProcessingProgress		is Numeric 3
+		derive value from CalculateProgress
+	EstimatedCompletion		is TimeStamp
+		derive value from CalculateEstimatedTime
+	CurrentBatchSize		is Numeric 6
+		derive value from ActiveTransactionCount
+	ErrorRate				is Numeric 5
+		derive value from CalculateErrorRate
+
+Local Fields
+	LocalProcessingStart	is TimeStamp
+	LocalErrorCount			is Numeric 10
+	LocalSuccessCount		is Numeric 10
+	LocalCurrentTransaction	is like FinancialTransaction
+	LocalBatchProcessor		is a DerivedField
+		type is Boolean
+		restricted
+		return ProcessorType = ProcessorType.BatchProcessor
+	LocalNotificationList	is a MessageField
+		"ProcessingNotifications"
+
+Derived Fields
+	ProcessorStatusText		is a DerivedField
+		type is Alpha size 20
+		restricted
+			if (Status = Status.Draft)
+				return "Draft"
+			if (Status = Status.Active)
+				return "Active"
+			if (Status = Status.Processing)
+				return "Processing"
+			if (Status = Status.Completed)
+				return "Completed"
+			if (Status = Status.Failed)
+				return "Failed"
+			if (Status = Status.Suspended)
+				return "Suspended"
+			else
+				return "Unknown"
+	
+	PriorityDescription		is a DerivedField
+		type is Alpha size 10
+		restricted
+			if (Priority = Priority.Low)
+				return "Low"
+			if (Priority = Priority.Normal)
+				return "Normal"
+			if (Priority = Priority.High)
+				return "High"
+			if (Priority = Priority.Critical)
+				return "Critical"
+			else
+				return "Normal"
+	
+	CanProcess				is a DerivedField
+		type is Boolean
+		restricted
+		return Status = Status.Active and ProcessingDate <= system current date
+	
+	RequiresApproval		is a DerivedField
+		type is Boolean
+		restricted
+		return TotalAmount > 100000 and ApprovedBy not entered
+
+Conditions
+	IsProcessing
+		when (Status = Status.Processing)
+	
+	HasErrors
+		when (LocalErrorCount > 0)
+	
+	ExceedsThreshold
+		when (LocalErrorCount > ErrorThreshold)
+	
+	HighPriority
+		when (Priority >= Priority.High)
+	
+	ReadyForProcessing
+		when (Status = Status.Active and ProcessingDate <= system current date)
+
+Relations
+	FinancialTransactionRel
+		one-to-many relation to FinancialTransaction
+		Field Mapping uses symbolic key
+			related.Company = Company
+			related.TransactionProcessor = TransactionProcessor
+		Instance Selection
+			where (related.Status != "Deleted")
+	
+	ProcessingLogRel
+		one-to-many relation to ProcessingLog
+		Field Mapping uses ByProcessor
+			related.Company = Company
+			related.TransactionProcessor = TransactionProcessor
+	
+	ApprovalWorkflowRel
+		one-to-one relation to ApprovalWorkflow
+		Field Mapping uses symbolic key
+			related.Company = Company
+			related.ReferenceNumber = TransactionProcessor
+	
+	NotificationRel
+		one-to-many relation to NotificationQueue
+		Field Mapping uses ByReference
+			related.Company = Company
+			related.ReferenceType = "PROCESSOR"
+			related.ReferenceNumber = TransactionProcessor
+
+Sets
+	ByProcessingDate
+		Sort Order
+			ProcessingDate
+			Priority descending
+			TransactionProcessor
+	
+	ByStatus
+		Sort Order
+			Status
+			ProcessingDate
+			TransactionProcessor
+	
+	ActiveProcessors
+		Sort Order
+			Priority descending
+			ProcessingDate
+			TransactionProcessor
+	
+	FailedProcessors
+		Sort Order
+			LastProcessedTime descending
+			TransactionProcessor
+
+Field Rules
+	TransactionProcessor
+		required
+		initial value is next number
+	
+	ProcessorType
+		required
+		default to ProcessorType.BatchProcessor
+	
+	Status
+		required
+		default to Status.Draft
+	
+	ProcessingDate
+		required
+		default to system current date
+	
+	Currency
+		required
+		default to base currency
+	
+	ErrorThreshold
+		required
+		default to 10
+		constraint (ErrorThreshold >= 0 and ErrorThreshold <= 999)
+			"ErrorThresholdMustBeBetween0And999"
+	
+	RetryCount
+		default to 0
+		constraint (RetryCount >= 0 and RetryCount <= 99)
+			"RetryCountMustBeBetween0And99"
+	
+	Priority
+		required
+		default to Priority.Normal
+	
+	TotalAmount
+		constraint (TotalAmount >= 0)
+			"TotalAmountCannotBeNegative"
+	
+	NotificationEmail
+		constraint (NotificationEmail matches "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$" or NotificationEmail not entered)
+			"InvalidEmailFormat"
+
+Actions
+	Create is a Create Action
+		Entrance Rules
+			if (RequiresApproval)
+				invoke Create ApprovalWorkflowRel
+					invoked.WorkflowType = "FINANCIAL_PROCESSOR"
+					invoked.RequiredApprovalLevel = 2
+		Action Rules
+			CreatedBy = actor.agent(Employee).Employee
+			BatchNumber = next number from BatchNumberSequence
+			if (ProcessorType = ProcessorType.ScheduledProcessor)
+				invoke Create ScheduledTask
+					invoked.TaskType = "PROCESSOR_EXECUTION"
+					invoked.ScheduledDate = ProcessingDate
+					invoked.ReferenceNumber = TransactionProcessor
+		Exit Rules
+			if (NotificationEmail entered)
+				invoke Create NotificationRel
+					invoked.NotificationType = "PROCESSOR_CREATED"
+					invoked.RecipientEmail = NotificationEmail
+					invoked.Message = "Financial processor " + TransactionProcessor + " created"
+
+	Update is an Update Action
+		Entrance Rules
+			constraint (Status != Status.Processing)
+				"CannotUpdateProcessorWhileProcessing"
+			if (TotalAmountChanged and RequiresApproval)
+				constraint (ApprovedBy entered)
+					"ApprovalRequiredForAmountChanges"
+		Action Rules
+			if (StatusChanged and Status = Status.Active)
+				if (RequiresApproval)
+					constraint (ApprovedBy entered)
+						"ApprovalRequiredBeforeActivation"
+			if (ProcessingDateChanged)
+				if (ProcessorType = ProcessorType.ScheduledProcessor)
+					invoke Update ScheduledTaskRel
+						invoked.ScheduledDate = ProcessingDate
+
+	Delete is a Delete Action
+		confirmation required
+			"DeleteProcessor?"
+		Entrance Rules
+			constraint (Status != Status.Processing)
+				"CannotDeleteProcessorWhileProcessing"
+			constraint (not FinancialTransactionRel exists)
+				"CannotDeleteProcessorWithTransactions"
+		Action Rules
+			for each ProcessingLogRel
+				invoke Delete each
+			for each NotificationRel
+				invoke Delete each
+			if (ApprovalWorkflowRel exists)
+				invoke Delete ApprovalWorkflowRel
+
+	StartProcessing is an Instance Action
+		restricted
+		valid when (ReadyForProcessing and not IsProcessing)
+		confirmation required
+			"StartProcessingTransactions?"
+		Entrance Rules
+			constraint (FinancialTransactionRel exists)
+				"NoTransactionsToProcess"
+			if (RequiresApproval)
+				constraint (ApprovedBy entered)
+					"ApprovalRequiredBeforeProcessing"
+		Action Rules
+			Status = Status.Processing
+			LocalProcessingStart = system current timestamp
+			LocalErrorCount = 0
+			LocalSuccessCount = 0
+			RetryCount = 0
+			invoke Create ProcessingLogRel
+				invoked.LogType = "START"
+				invoked.Message = "Processing started by " + actor.agent(Employee).Employee
+				invoked.Timestamp = LocalProcessingStart
+		Exit Rules
+			if (NotificationEmail entered)
+				invoke Create NotificationRel
+					invoked.NotificationType = "PROCESSING_STARTED"
+					invoked.RecipientEmail = NotificationEmail
+
+	ProcessTransactions is an Instance Action
+		restricted
+		valid when (IsProcessing)
+		run in background
+		Action Rules
+			for each FinancialTransactionRel
+				if (each.Status = "PENDING")
+					invoke ProcessSingleTransaction each
+						resume on error
+							LocalErrorCount += 1
+							invoke Create ProcessingLogRel
+								invoked.LogType = "ERROR"
+								invoked.Message = "Transaction " + each.Transaction + " failed: " + error message
+								invoked.Timestamp = system current timestamp
+					if (not error occurred)
+						LocalSuccessCount += 1
+					if (ExceedsThreshold)
+						if (FailureAction = FailureAction.Stop)
+							Status = Status.Failed
+							end set action instance loop
+						else if (FailureAction = FailureAction.Rollback)
+							invoke RollbackProcessing
+							Status = Status.Failed
+							end set action instance loop
+			TotalTransactions = LocalSuccessCount + LocalErrorCount
+			if (LocalErrorCount = 0)
+				Status = Status.Completed
+			else if (LocalErrorCount <= ErrorThreshold)
+				Status = Status.Completed
+			else
+				Status = Status.Failed
+			LastProcessedTime = system current timestamp
+		Exit Rules
+			invoke Create ProcessingLogRel
+				invoked.LogType = "COMPLETE"
+				invoked.Message = "Processing completed. Success: " + LocalSuccessCount + ", Errors: " + LocalErrorCount
+				invoked.Timestamp = system current timestamp
+
+	SuspendProcessing is an Instance Action
+		restricted
+		valid when (IsProcessing)
+		confirmation required
+			"SuspendProcessing?"
+		Action Rules
+			Status = Status.Suspended
+			invoke Create ProcessingLogRel
+				invoked.LogType = "SUSPEND"
+				invoked.Message = "Processing suspended by " + actor.agent(Employee).Employee
+				invoked.Timestamp = system current timestamp
+
+	ResumeProcessing is an Instance Action
+		restricted
+		valid when (Status = Status.Suspended)
+		Action Rules
+			Status = Status.Processing
+			invoke Create ProcessingLogRel
+				invoked.LogType = "RESUME"
+				invoked.Message = "Processing resumed by " + actor.agent(Employee).Employee
+				invoked.Timestamp = system current timestamp
+			invoke ProcessTransactions
+
+	RetryFailed is an Instance Action
+		restricted
+		valid when (Status = Status.Failed and AutoRetry and RetryCount < 3)
+		Action Rules
+			RetryCount += 1
+			Status = Status.Processing
+			LocalErrorCount = 0
+			invoke Create ProcessingLogRel
+				invoked.LogType = "RETRY"
+				invoked.Message = "Retry attempt " + RetryCount + " started"
+				invoked.Timestamp = system current timestamp
+			invoke ProcessTransactions
+
+	ApproveProcessor is an Instance Action
+		restricted
+		valid when (RequiresApproval and ApprovedBy not entered)
+		Parameters
+			ApprovalComments	is Alpha size 200
+		Action Rules
+			ApprovedBy = actor.agent(Employee).Employee
+			invoke Create ProcessingLogRel
+				invoked.LogType = "APPROVAL"
+				invoked.Message = "Approved by " + ApprovedBy + ": " + ApprovalComments
+				invoked.Timestamp = system current timestamp
+			if (ApprovalWorkflowRel exists)
+				invoke Complete ApprovalWorkflowRel
+					invoked.ApprovedBy = ApprovedBy
+					invoked.ApprovalDate = system current date
+
+	BatchProcessActiveProcessors is a Set Action
+		restricted
+		run in background
+		Parameters
+			PrmMaxProcessors		is Numeric 3
+			PrmPriorityFilter		is Numeric 1
+		Parameter Rules
+			PrmMaxProcessors
+				required
+				default to 10
+				constraint (PrmMaxProcessors > 0 and PrmMaxProcessors <= 100)
+					"MaxProcessorsMustBeBetween1And100"
+			PrmPriorityFilter
+				default to Priority.Normal
+		Instance Selection
+			where (ReadyForProcessing
+			and   Priority >= PrmPriorityFilter)
+		Sort Order
+			Priority descending
+			ProcessingDate
+		Accumulators
+			ProcessedCount
+			ErrorCount
+		Action Rules
+			Instance Rules
+				if (ProcessedCount < PrmMaxProcessors)
+					invoke StartProcessing
+						resume on error
+							increment ErrorCount
+					increment ProcessedCount
+					commit transaction
+				else
+					end set action instance loop
+		Exit Rules
+			invoke Create SystemLog
+				invoked.LogType = "BATCH_PROCESSING"
+				invoked.Message = "Batch processing completed. Processed: " + ProcessedCount + ", Errors: " + ErrorCount
+
+	CleanupCompletedProcessors is a Set Action
+		restricted
+		run in background
+		Parameters
+			PrmRetentionDays		is Numeric 3
+		Parameter Rules
+			PrmRetentionDays
+				required
+				default to 30
+				constraint (PrmRetentionDays > 0)
+					"RetentionDaysMustBeGreaterThanZero"
+		Instance Selection
+			where (Status = Status.Completed
+			and   LastProcessedTime < (system current date - PrmRetentionDays))
+		Accumulators
+			CleanedCount
+		Action Rules
+			Instance Rules
+				for each ProcessingLogRel
+					invoke Delete each
+				for each NotificationRel
+					if (each.Processed)
+						invoke Delete each
+				increment CleanedCount
+				commit transaction
+
+	GenerateProcessingReport is a Set Action
+		restricted
+		Parameters
+			PrmStartDate			is Date
+			PrmEndDate				is Date
+			PrmIncludeDetails		is Boolean
+		Parameter Rules
+			PrmStartDate
+				required
+				default to system current date - 7
+			PrmEndDate
+				required
+				default to system current date
+				constraint (PrmEndDate >= PrmStartDate)
+					"EndDateMustBeAfterStartDate"
+			PrmIncludeDetails
+				default to false
+		Instance Selection
+			where (ProcessingDate >= PrmStartDate
+			and   ProcessingDate <= PrmEndDate)
+		Sort Order
+			ProcessingDate descending
+			Status
+		Accumulators
+			TotalProcessors
+			CompletedProcessors
+			FailedProcessors
+			TotalTransactionAmount
+		Action Rules
+			Instance Rules
+				increment TotalProcessors
+				if (Status = Status.Completed)
+					increment CompletedProcessors
+				else if (Status = Status.Failed)
+					increment FailedProcessors
+				TotalTransactionAmount += TotalAmount
+			Empty Set Rules
+				invoke Create ProcessingReport
+					invoked.ReportDate = system current date
+					invoked.StartDate = PrmStartDate
+					invoked.EndDate = PrmEndDate
+					invoked.Message = "No processors found for specified date range"
+		Exit Rules
+			invoke Create ProcessingReport
+				invoked.ReportDate = system current date
+				invoked.StartDate = PrmStartDate
+				invoked.EndDate = PrmEndDate
+				invoked.TotalProcessors = TotalProcessors
+				invoked.CompletedProcessors = CompletedProcessors
+				invoked.FailedProcessors = FailedProcessors
+				invoked.TotalAmount = TotalTransactionAmount
+				invoked.SuccessRate = if (TotalProcessors > 0) then (CompletedProcessors * 100 / TotalProcessors) else 0
