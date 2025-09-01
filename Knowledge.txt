@@ -17,7 +17,7 @@ Amazon Q will follow these instructions without fail when this file is reference
 Format: *LPL Tip: User Interface Definition syntax enables creation of rich, interactive user interfaces with comprehensive form layouts, list views, card displays, charts, and responsive design elements, supporting complex business workflows and data visualization requirements.*
 
 === DIRECTORY STRUCTURE UPDATE ===
-- Use 'C:\Visual Basic Code\LPL Library\Outputs' for generated files
+- Use '\LPL Library\Outputs' for generated files
 - All future generated files will be placed in Outputs subdirectory
 
 === BUSINESS CLASS STRUCTURE ===
